@@ -31,7 +31,7 @@
 //! # fn main() {}
 //! ```
 #![doc(html_root_url = "https://docs.rs/phf_macros/0.7.20")]
-#![feature(plugin_registrar, quote, rustc_private)]
+#![feature(plugin_registrar, rustc_private)]
 
 // NOTE: Duplicated from stdlib
 macro_rules! panictry {
@@ -65,7 +65,7 @@ use syntax::ast::{self, Expr, ExprKind, Mutability, TyKind};
 use syntax_pos::Span;
 use syntax::ext::base::{DummyResult, ExtCtxt, MacResult};
 use syntax::ext::build::AstBuilder;
-use syntax::fold::Folder;
+use syntax::mut_visit::MutVisitor;
 use syntax::parse;
 use syntax::parse::token::{Comma, Eof, FatArrow};
 use syntax::print::pprust;
@@ -141,7 +141,8 @@ fn parse_map(cx: &mut ExtCtxt, tts: &[TokenTree]) -> Option<Vec<Entry>> {
 
     let mut bad = false;
     while parser.token != Eof {
-        let key = cx.expander().fold_expr(panictry!(parser.parse_expr()));
+        let mut key = panictry!(parser.parse_expr());
+        cx.expander().visit_expr(&mut key);
         let key_contents = parse_key(cx, &*key).unwrap_or_else(|| {
             bad = true;
             Key::Str(Symbol::intern("").as_str())
@@ -177,11 +178,12 @@ fn parse_map(cx: &mut ExtCtxt, tts: &[TokenTree]) -> Option<Vec<Entry>> {
 fn parse_set(cx: &mut ExtCtxt, tts: &[TokenTree]) -> Option<Vec<Entry>> {
     let mut parser = parse::new_parser_from_tts(cx.parse_sess(), tts.to_vec());
     let mut entries = Vec::new();
-    let value = quote_expr!(&*cx, ());
+    let value = &*cx.expr_tuple(parser.span, vec![]);
 
     let mut bad = false;
     while parser.token != Eof {
-        let key = cx.expander().fold_expr(panictry!(parser.parse_expr()));
+        let mut key = panictry!(parser.parse_expr());
+        cx.expander().visit_expr(&mut key);
         let key_contents = parse_key(cx, &*key).unwrap_or_else(|| {
             bad = true;
             Key::Str(Symbol::intern("").as_str())
@@ -191,7 +193,7 @@ fn parse_set(cx: &mut ExtCtxt, tts: &[TokenTree]) -> Option<Vec<Entry>> {
         entries.push(Entry {
             key_contents: key_contents,
             key: key,
-            value: value.clone(),
+            value: P(value.clone())
         });
 
         if !parser.eat(&Comma) && parser.token != Eof {

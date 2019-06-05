@@ -1,7 +1,7 @@
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-use syntax::ast::Expr;
+use syntax::ast::{Expr, LitKind, LitIntType, UintTy};
 use syntax_pos::Span;
 use syntax::ext::base::{ExtCtxt, MacEager, MacResult};
 use syntax::ext::build::AstBuilder;
@@ -55,7 +55,7 @@ pub fn create_map(
     let disps = state
         .disps
         .iter()
-        .map(|&(d1, d2)| quote_expr!(&*cx, ($d1, $d2)))
+        .map(|&(d1, d2)| cx.expr_tuple(sp, vec![cx.expr_u32(sp, d1), cx.expr_u32(sp, d2)]))
         .collect();
     let disps = cx.expr_vec(sp, disps);
 
@@ -66,17 +66,21 @@ pub fn create_map(
             let &Entry {
                 ref key, ref value, ..
             } = &entries[idx];
-            quote_expr!(&*cx, ($key, $value))
+            cx.expr_tuple(sp, vec![key.clone(), value.clone()])
         })
         .collect();
     let entries = cx.expr_vec(sp, entries);
 
     let key = state.key;
-    MacEager::expr(quote_expr!(cx, ::phf::Map {
-        key: $key,
-        disps: &$disps,
-        entries: &$entries,
-    }))
+    MacEager::expr(cx.expr_struct(
+        sp,
+        cx.path_global(sp, vec![cx.ident_of("phf"), cx.ident_of("Map")]),
+        vec![
+            cx.field_imm(sp, cx.ident_of("key"), cx.expr_lit(sp, LitKind::Int(key as u128, LitIntType::Unsigned(UintTy::U64)))),
+            cx.field_imm(sp, cx.ident_of("disps"), cx.expr_addr_of(sp, disps)),
+            cx.field_imm(sp, cx.ident_of("entries"), cx.expr_addr_of(sp, entries)),
+        ]
+    ))
 }
 
 pub fn create_set(
@@ -86,5 +90,11 @@ pub fn create_set(
     state: HashState,
 ) -> Box<MacResult + 'static> {
     let map = create_map(cx, sp, entries, state).make_expr().unwrap();
-    MacEager::expr(quote_expr!(cx, ::phf::Set { map: $map }))
+    MacEager::expr(cx.expr_struct(
+        sp,
+        cx.path_global(sp, vec![cx.ident_of("phf"), cx.ident_of("Set")]),
+        vec![
+            cx.field_imm(sp, cx.ident_of("map"), map)
+        ]
+    ))
 }
