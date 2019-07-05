@@ -106,7 +106,7 @@ fn generate_hash(cx: &mut ExtCtxt, sp: Span, entries: &[Entry]) -> HashState {
 }
 
 fn expand_phf_map(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> Box<MacResult + 'static> {
-    let entries = match parse_map(cx, tts) {
+    let entries = match parse_map(cx, sp, tts) {
         Some(entries) => entries,
         None => return DummyResult::expr(sp),
     };
@@ -121,7 +121,7 @@ fn expand_phf_map(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> Box<MacResul
 }
 
 fn expand_phf_set(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> Box<MacResult + 'static> {
-    let entries = match parse_set(cx, tts) {
+    let entries = match parse_set(cx, sp, tts) {
         Some(entries) => entries,
         None => return DummyResult::expr(sp),
     };
@@ -135,7 +135,7 @@ fn expand_phf_set(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> Box<MacResul
     create_set(cx, sp, entries, state)
 }
 
-fn parse_map(cx: &mut ExtCtxt, tts: &[TokenTree]) -> Option<Vec<Entry>> {
+fn parse_map(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> Option<Vec<Entry>> {
     let mut parser = parse::new_parser_from_tts(cx.parse_sess(), tts.to_vec());
     let mut entries = Vec::new();
 
@@ -150,7 +150,7 @@ fn parse_map(cx: &mut ExtCtxt, tts: &[TokenTree]) -> Option<Vec<Entry>> {
         let key = adjust_key(cx, key);
 
         if !parser.eat(&FatArrow) {
-            cx.span_err(parser.span, "expected `=>`");
+            cx.span_err(sp, "expected `=>`");
             return None;
         }
 
@@ -163,7 +163,7 @@ fn parse_map(cx: &mut ExtCtxt, tts: &[TokenTree]) -> Option<Vec<Entry>> {
         });
 
         if !parser.eat(&Comma) && parser.token != Eof {
-            cx.span_err(parser.span, "expected `,`");
+            cx.span_err(sp, "expected `,`");
             return None;
         }
     }
@@ -175,10 +175,10 @@ fn parse_map(cx: &mut ExtCtxt, tts: &[TokenTree]) -> Option<Vec<Entry>> {
     Some(entries)
 }
 
-fn parse_set(cx: &mut ExtCtxt, tts: &[TokenTree]) -> Option<Vec<Entry>> {
+fn parse_set(cx: &mut ExtCtxt, sp: Span, tts: &[TokenTree]) -> Option<Vec<Entry>> {
     let mut parser = parse::new_parser_from_tts(cx.parse_sess(), tts.to_vec());
     let mut entries = Vec::new();
-    let value = &*cx.expr_tuple(parser.span, vec![]);
+    let value = &*cx.expr_tuple(sp, vec![]);
 
     let mut bad = false;
     while parser.token != Eof {
@@ -197,7 +197,7 @@ fn parse_set(cx: &mut ExtCtxt, tts: &[TokenTree]) -> Option<Vec<Entry>> {
         });
 
         if !parser.eat(&Comma) && parser.token != Eof {
-            cx.span_err(parser.span, "expected `,`");
+            cx.span_err(sp, "expected `,`");
             return None;
         }
     }
